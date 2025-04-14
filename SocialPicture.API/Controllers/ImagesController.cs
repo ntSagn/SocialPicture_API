@@ -20,18 +20,47 @@ namespace SocialPicture.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ImageDto>>> GetAllImages([FromQuery] int? userId = null, [FromQuery] bool publicOnly = true)
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<ImageDto>>> GetAllImages(
+    [FromQuery] int? userId = null,
+    [FromQuery] bool publicOnly = true,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20)
         {
-            int? currentUserId = null;
+            // Default to public-only for non-authenticated users
+            if (!User.Identity?.IsAuthenticated == true && !publicOnly)
+            {
+                publicOnly = true;
+            }
 
+            // Get current user ID if authenticated
+            int? currentUserId = null;
             if (User.Identity?.IsAuthenticated == true)
             {
                 currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
             }
 
-            var images = await _imageService.GetAllImagesAsync(userId, publicOnly, currentUserId);
-            return Ok(images);
+            // If no specific user is requested but user is authenticated,
+            // we can personalize the feed (followers, interests, etc.)
+            bool personalizedFeed = userId == null && currentUserId.HasValue;
+
+            var images = await _imageService.GetAllImagesAsync(
+                userId,
+                publicOnly,
+                currentUserId,
+                page,
+                pageSize,
+                personalizedFeed);
+
+            return Ok(new
+            {
+                page,
+                pageSize,
+                totalCount = images.Count(),
+                items = images
+            });
         }
+
 
 
         [HttpGet("{id}")]

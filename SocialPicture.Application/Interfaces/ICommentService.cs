@@ -1,4 +1,5 @@
 using SocialPicture.Application.DTOs;
+using SocialPicture.Domain.Entities;
 
 namespace SocialPicture.Application.Interfaces
 {
@@ -10,6 +11,6 @@ namespace SocialPicture.Application.Interfaces
         Task<CommentDto> UpdateCommentAsync(int id, int userId, UpdateCommentDto updateCommentDto);
         Task<bool> DeleteCommentAsync(int id, int userId);
         Task<IEnumerable<CommentDto>> GetRepliesByCommentIdAsync(int commentId, int? currentUserId = null);
+        Task<CommentDto> MapCommentToCommentDtoAsync(Comment comment, int? currentUserId = null);
     }
 }
-

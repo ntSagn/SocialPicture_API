@@ -131,6 +131,17 @@ namespace SocialPicture.Persistence
                       .HasForeignKey(e => e.TagId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
+            modelBuilder.Entity<SavedImage>()
+        .HasOne(s => s.User)
+        .WithMany(u => u.SavedImages)
+        .HasForeignKey(s => s.UserId)
+        .OnDelete(DeleteBehavior.Restrict); // Change from Cascade to Restrict
+
+            modelBuilder.Entity<SavedImage>()
+                .HasOne(s => s.Image)
+                .WithMany(i => i.SavedByUsers)
+                .HasForeignKey(s => s.ImageId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Report entity configuration
             modelBuilder.Entity<Report>(entity =>
@@ -160,6 +171,17 @@ namespace SocialPicture.Persistence
                       .HasForeignKey(e => e.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
+            modelBuilder.Entity<Follow>()
+        .HasOne(f => f.Follower)
+        .WithMany(u => u.Following)
+        .HasForeignKey(f => f.FollowerId)
+        .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Follow>()
+                .HasOne(f => f.Following)
+                .WithMany(u => u.Followers)
+                .HasForeignKey(f => f.FollowingId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

@@ -34,6 +34,11 @@ namespace SocialPicture.Infrastructure
             services.AddScoped<ICommentService, CommentService>();
             services.AddScoped<IFollowService, FollowService>();
             services.AddScoped<ITagService, TagService>();
+            services.AddScoped<ISavedImageService, SavedImageService>();
+            services.AddScoped<IReportService, ReportService>();
+            services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<ISearchService, SearchService>();
+            services.AddScoped<ICommentLikeService, CommentLikeService>();
 
             // JWT Authentication
             services.AddAuthentication(options =>

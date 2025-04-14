@@ -11,6 +11,13 @@ namespace SocialPicture.Application.Interfaces
     public interface IImageService
     {
         Task<IEnumerable<ImageDto>> GetAllImagesAsync(int? userId = null, bool publicOnly = true, int? currentUserId = null);
+        Task<IEnumerable<ImageDto>> GetAllImagesAsync(
+        int? userId = null,
+        bool publicOnly = true,
+        int? currentUserId = null,
+        int page = 1,
+        int pageSize = 20,
+        bool personalizedFeed = false);
         Task<ImageDto> GetImageByIdAsync(int id, int? currentUserId = null);
         Task<ImageDto> CreateImageAsync(int userId, CreateImageDto createImageDto, IFormFile imageFile);
         Task<ImageDto> UpdateImageAsync(int id, int userId, UpdateImageDto updateImageDto);

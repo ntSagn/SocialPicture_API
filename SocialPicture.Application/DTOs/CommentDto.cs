@@ -13,8 +13,10 @@ namespace SocialPicture.Application.DTOs
         public DateTime UpdatedAt { get; set; }
         public int LikesCount { get; set; }
         public bool IsLikedByCurrentUser { get; set; }
-        public List<CommentDto>? Replies { get; set; }
+        public int RepliesCount { get; set; }
+        public IEnumerable<CommentDto>? Replies { get; set; }
     }
+
 
     public class CreateCommentDto
     {

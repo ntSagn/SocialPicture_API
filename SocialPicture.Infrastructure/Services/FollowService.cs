@@ -68,7 +68,7 @@ namespace SocialPicture.Infrastructure.Services
             return following;
         }
 
-        public async Task<FollowDto> FollowUserAsync(int followerId, int followingId)
+        public async Task<bool> FollowUserAsync(int followerId, int followingId)
         {
             // Prevent self-following
             if (followerId == followingId)
@@ -76,51 +76,21 @@ namespace SocialPicture.Infrastructure.Services
                 throw new InvalidOperationException("Users cannot follow themselves.");
             }
 
-            // Check if both users exist
-            var follower = await _context.Users.FindAsync(followerId);
             var following = await _context.Users.FindAsync(followingId);
-
-            if (follower == null)
+            if (following != null)
             {
-                throw new KeyNotFoundException($"Follower with ID {followerId} not found.");
+                following.FollowersCount = (following.FollowersCount ?? 0) + 1;
             }
 
-            if (following == null)
+            var follower = await _context.Users.FindAsync(followerId);
+            if (follower != null)
             {
-                throw new KeyNotFoundException($"User to follow with ID {followingId} not found.");
+                follower.FollowingCount = (follower.FollowingCount ?? 0) + 1;
             }
 
-            // Check if already following
-            var existingFollow = await _context.Follows
-                .FirstOrDefaultAsync(f => f.FollowerId == followerId && f.FollowingId == followingId);
-
-            if (existingFollow != null)
-            {
-                throw new InvalidOperationException($"User already follows this user.");
-            }
-
-            // Create follow relationship
-            var follow = new Follow
-            {
-                FollowerId = followerId,
-                FollowingId = followingId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Follows.Add(follow);
             await _context.SaveChangesAsync();
 
-            return new FollowDto
-            {
-                FollowId = follow.FollowId,
-                FollowerId = follow.FollowerId,
-                FollowerUsername = follower.Username,
-                FollowerProfilePicture = follower.ProfilePicture,
-                FollowingId = follow.FollowingId,
-                FollowingUsername = following.Username,
-                FollowingProfilePicture = following.ProfilePicture,
-                CreatedAt = follow.CreatedAt
-            };
+            return true;
         }
 
         public async Task<bool> UnfollowUserAsync(int followerId, int followingId)

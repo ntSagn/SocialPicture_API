@@ -87,6 +87,105 @@ namespace SocialPicture.Infrastructure.Services
             return imageDtos;
         }
 
+        public async Task<IEnumerable<ImageDto>> GetAllImagesAsync(
+    int? userId = null,
+    bool publicOnly = true,
+    int? currentUserId = null,
+    int page = 1,
+    int pageSize = 20,
+    bool personalizedFeed = false)
+        {
+            var query = _context.Images
+                .Include(i => i.User)
+                .Include(i => i.Likes)
+                .Include(i => i.Comments)
+                .AsQueryable();
+
+            // Filter by user if specified
+            if (userId.HasValue)
+            {
+                query = query.Where(i => i.UserId == userId);
+            }
+
+            // Always filter by public status if required
+            if (publicOnly)
+            {
+                query = query.Where(i => i.IsPublic);
+            }
+            // If not public only but user is authenticated, allow them to see their own private images
+            else if (currentUserId.HasValue)
+            {
+                query = query.Where(i => i.IsPublic || i.UserId == currentUserId.Value);
+            }
+
+            // Personalized feed logic
+            if (personalizedFeed && currentUserId.HasValue)
+            {
+                // Get users followed by current user
+                var followedUserIds = await _context.Follows
+                    .Where(f => f.FollowerId == currentUserId.Value)
+                    .Select(f => f.FollowingId)
+                    .ToListAsync();
+
+                // Prioritize images from followed users
+                if (followedUserIds.Any())
+                {
+                    query = query.OrderByDescending(i => followedUserIds.Contains(i.UserId))
+                                 .ThenByDescending(i => i.CreatedAt);
+                }
+                else
+                {
+                    query = query.OrderByDescending(i => i.CreatedAt);
+                }
+            }
+            else
+            {
+                // Default ordering by creation date
+                query = query.OrderByDescending(i => i.CreatedAt);
+            }
+
+            // Apply pagination
+            var pagedImages = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var imageDtos = new List<ImageDto>();
+
+            foreach (var image in pagedImages)
+            {
+                bool isLikedByCurrentUser = false;
+                bool isSavedByCurrentUser = false;
+
+                if (currentUserId.HasValue)
+                {
+                    isLikedByCurrentUser = await _context.Likes
+                        .AnyAsync(l => l.UserId == currentUserId.Value && l.ImageId == image.ImageId);
+
+                    isSavedByCurrentUser = await _context.SavedImages
+                        .AnyAsync(s => s.UserId == currentUserId.Value && s.ImageId == image.ImageId);
+                }
+
+                imageDtos.Add(new ImageDto
+                {
+                    ImageId = image.ImageId,
+                    UserId = image.UserId,
+                    UserName = image.User.Username,
+                    ImageUrl = image.ImageUrl,
+                    Caption = image.Caption,
+                    IsPublic = image.IsPublic,
+                    CreatedAt = image.CreatedAt,
+                    LikesCount = image.Likes.Count,
+                    CommentsCount = image.Comments.Count,
+                    IsLikedByCurrentUser = isLikedByCurrentUser,
+                    IsSavedByCurrentUser = isSavedByCurrentUser
+                });
+            }
+
+            return imageDtos;
+        }
+
+
 
         public async Task<ImageDto> GetImageByIdAsync(int id, int? currentUserId = null)
         {
@@ -142,7 +241,11 @@ namespace SocialPicture.Infrastructure.Services
             {
                 throw new KeyNotFoundException($"User with ID {userId} not found.");
             }
-
+            if (user != null)
+            {
+                user.PostsCount = (user.PostsCount ?? 0) + 1;
+                await _context.SaveChangesAsync();
+            }
             // Generate unique filename
             var fileName = $"{Guid.NewGuid()}_{Path.GetFileName(imageFile.FileName)}";
             var filePath = Path.Combine(_uploadDirectory, fileName);

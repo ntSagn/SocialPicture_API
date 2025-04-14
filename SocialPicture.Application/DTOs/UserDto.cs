@@ -14,6 +14,9 @@ namespace SocialPicture.Application.DTOs
         public string Email { get; set; } = string.Empty;
         public string Fullname { get; set; } = string.Empty;
         public string Bio { get; set; } = string.Empty;
+        public int? FollowersCount { get; set; }
+        public int? FollowingCount { get; set; }
+        public int? PostsCount { get; set; }
 
         public UserRole Role { get; set; }
         public string? ProfilePicture { get; set; }

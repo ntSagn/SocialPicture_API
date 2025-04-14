@@ -3,6 +3,10 @@ using SocialPicture.Application.DTOs;
 using SocialPicture.Application.Interfaces;
 using SocialPicture.Domain.Entities;
 using SocialPicture.Persistence;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace SocialPicture.Infrastructure.Services
 {
@@ -33,26 +37,11 @@ namespace SocialPicture.Infrastructure.Services
                 .ToListAsync();
 
             var commentDtos = new List<CommentDto>();
-            
+
             foreach (var comment in comments)
             {
-                var commentDto = new CommentDto
-                {
-                    CommentId = comment.CommentId,
-                    UserId = comment.UserId,
-                    Username = comment.User.Username,
-                    UserProfilePicture = comment.User.ProfilePicture,
-                    ImageId = comment.ImageId,
-                    Content = comment.Content,
-                    ParentCommentId = comment.ParentCommentId,
-                    CreatedAt = comment.CreatedAt,
-                    UpdatedAt = comment.UpdatedAt,
-                    LikesCount = comment.CommentLikes.Count,
-                    IsLikedByCurrentUser = currentUserId.HasValue && 
-                        comment.CommentLikes.Any(cl => cl.UserId == currentUserId.Value),
-                    Replies = await GetRepliesRecursiveAsync(comment.CommentId, currentUserId)
-                };
-                
+                var commentDto = await MapCommentToCommentDtoAsync(comment, currentUserId);
+                commentDto.Replies = await GetRepliesRecursiveAsync(comment.CommentId, currentUserId);
                 commentDtos.Add(commentDto);
             }
 
@@ -69,27 +58,11 @@ namespace SocialPicture.Infrastructure.Services
                 .ToListAsync();
 
             var replyDtos = new List<CommentDto>();
-            
+
             foreach (var reply in replies)
             {
-                var replyDto = new CommentDto
-                {
-                    CommentId = reply.CommentId,
-                    UserId = reply.UserId,
-                    Username = reply.User.Username,
-                    UserProfilePicture = reply.User.ProfilePicture,
-                    ImageId = reply.ImageId,
-                    Content = reply.Content,
-                    ParentCommentId = reply.ParentCommentId,
-                    CreatedAt = reply.CreatedAt,
-                    UpdatedAt = reply.UpdatedAt,
-                    LikesCount = reply.CommentLikes.Count,
-                    IsLikedByCurrentUser = currentUserId.HasValue && 
-                        reply.CommentLikes.Any(cl => cl.UserId == currentUserId.Value),
-                    // Get nested replies recursively
-                    Replies = await GetRepliesRecursiveAsync(reply.CommentId, currentUserId)
-                };
-                
+                var replyDto = await MapCommentToCommentDtoAsync(reply, currentUserId);
+                replyDto.Replies = await GetRepliesRecursiveAsync(reply.CommentId, currentUserId);
                 replyDtos.Add(replyDto);
             }
 
@@ -108,23 +81,14 @@ namespace SocialPicture.Infrastructure.Services
                 throw new KeyNotFoundException($"Comment with ID {id} not found.");
             }
 
-            return new CommentDto
+            var commentDto = await MapCommentToCommentDtoAsync(comment, currentUserId);
+
+            if (comment.ParentCommentId == null)
             {
-                CommentId = comment.CommentId,
-                UserId = comment.UserId,
-                Username = comment.User.Username,
-                UserProfilePicture = comment.User.ProfilePicture,
-                ImageId = comment.ImageId,
-                Content = comment.Content,
-                ParentCommentId = comment.ParentCommentId,
-                CreatedAt = comment.CreatedAt,
-                UpdatedAt = comment.UpdatedAt,
-                LikesCount = comment.CommentLikes.Count,
-                IsLikedByCurrentUser = currentUserId.HasValue && 
-                    comment.CommentLikes.Any(cl => cl.UserId == currentUserId.Value),
-                Replies = comment.ParentCommentId == null ? 
-                    await GetRepliesRecursiveAsync(comment.CommentId, currentUserId) : null
-            };
+                commentDto.Replies = await GetRepliesRecursiveAsync(comment.CommentId, currentUserId);
+            }
+
+            return commentDto;
         }
 
         public async Task<CommentDto> CreateCommentAsync(int userId, CreateCommentDto createCommentDto)
@@ -167,28 +131,15 @@ namespace SocialPicture.Infrastructure.Services
                 Content = createCommentDto.Content,
                 ParentCommentId = createCommentDto.ParentCommentId,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                User = user // Set the user for proper mapping
             };
 
             _context.Comments.Add(comment);
             await _context.SaveChangesAsync();
 
-            // Return the newly created comment
-            return new CommentDto
-            {
-                CommentId = comment.CommentId,
-                UserId = comment.UserId,
-                Username = user.Username,
-                UserProfilePicture = user.ProfilePicture,
-                ImageId = comment.ImageId,
-                Content = comment.Content,
-                ParentCommentId = comment.ParentCommentId,
-                CreatedAt = comment.CreatedAt,
-                UpdatedAt = comment.UpdatedAt,
-                LikesCount = 0,
-                IsLikedByCurrentUser = false,
-                Replies = new List<CommentDto>()
-            };
+            // Return the newly created comment mapped to DTO
+            return await MapCommentToCommentDtoAsync(comment, userId);
         }
 
         public async Task<CommentDto> UpdateCommentAsync(int id, int userId, UpdateCommentDto updateCommentDto)
@@ -214,22 +165,14 @@ namespace SocialPicture.Infrastructure.Services
             comment.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            return new CommentDto
+            var commentDto = await MapCommentToCommentDtoAsync(comment, userId);
+
+            if (comment.ParentCommentId == null)
             {
-                CommentId = comment.CommentId,
-                UserId = comment.UserId,
-                Username = comment.User.Username,
-                UserProfilePicture = comment.User.ProfilePicture,
-                ImageId = comment.ImageId,
-                Content = comment.Content,
-                ParentCommentId = comment.ParentCommentId,
-                CreatedAt = comment.CreatedAt,
-                UpdatedAt = comment.UpdatedAt,
-                LikesCount = comment.CommentLikes.Count,
-                IsLikedByCurrentUser = comment.CommentLikes.Any(cl => cl.UserId == userId),
-                Replies = comment.ParentCommentId == null ? 
-                    await GetRepliesRecursiveAsync(comment.CommentId, userId) : null
-            };
+                commentDto.Replies = await GetRepliesRecursiveAsync(comment.CommentId, userId);
+            }
+
+            return commentDto;
         }
 
         public async Task<bool> DeleteCommentAsync(int id, int userId)
@@ -253,7 +196,7 @@ namespace SocialPicture.Infrastructure.Services
             // Delete the comment and its replies will cascade due to FK constraints
             _context.Comments.Remove(comment);
             await _context.SaveChangesAsync();
-            
+
             return true;
         }
 
@@ -267,6 +210,34 @@ namespace SocialPicture.Infrastructure.Services
 
             return await GetRepliesRecursiveAsync(commentId, currentUserId);
         }
+
+        public async Task<CommentDto> MapCommentToCommentDtoAsync(Comment comment, int? currentUserId = null)
+        {
+            var likesCount = await _context.CommentLikes.CountAsync(cl => cl.CommentId == comment.CommentId);
+            var repliesCount = await _context.Comments.CountAsync(c => c.ParentCommentId == comment.CommentId);
+
+            bool isLikedByCurrentUser = false;
+            if (currentUserId.HasValue)
+            {
+                isLikedByCurrentUser = await _context.CommentLikes
+                    .AnyAsync(cl => cl.CommentId == comment.CommentId && cl.UserId == currentUserId.Value);
+            }
+
+            return new CommentDto
+            {
+                CommentId = comment.CommentId,
+                UserId = comment.UserId,
+                Username = comment.User.Username,
+                UserProfilePicture = comment.User.ProfilePicture,
+                ImageId = comment.ImageId,
+                Content = comment.Content,
+                ParentCommentId = comment.ParentCommentId,
+                CreatedAt = comment.CreatedAt,
+                UpdatedAt = comment.UpdatedAt,
+                LikesCount = likesCount,
+                IsLikedByCurrentUser = isLikedByCurrentUser,
+                RepliesCount = repliesCount
+            };
+        }
     }
 }
-
