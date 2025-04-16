@@ -1,22 +1,54 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using SocialPicture.Application.DTOs;
 using SocialPicture.Application.Interfaces;
 using SocialPicture.Domain.Entities;
+using SocialPicture.Domain.Enums;
 using SocialPicture.Persistence;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace SocialPicture.Infrastructure.Services
 {
     public class CommentService : ICommentService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        
 
-        public CommentService(ApplicationDbContext context)
+        public CommentService(
+            ApplicationDbContext context,
+            IHttpContextAccessor httpContextAccessor
+        )
         {
             _context = context;
+            _httpContextAccessor = httpContextAccessor;    
+        }
+
+        private string GetFullImageUrl(string? relativeUrl)
+        {
+            if (string.IsNullOrEmpty(relativeUrl))
+                return string.Empty;
+
+            // If already a full URL, return as is
+            if (relativeUrl.StartsWith("http://") || relativeUrl.StartsWith("https://"))
+                return relativeUrl;
+
+            // Build base URL from current request
+            var request = _httpContextAccessor.HttpContext?.Request;
+            if (request == null)
+                return relativeUrl;
+
+            var baseUrl = $"{request.Scheme}://{request.Host}";
+
+            // Remove leading slash if present for proper joining
+            if (relativeUrl.StartsWith("/"))
+                relativeUrl = relativeUrl.Substring(1);
+
+            return $"{baseUrl}/{relativeUrl}";
         }
 
         public async Task<IEnumerable<CommentDto>> GetCommentsByImageIdAsync(int imageId, int? currentUserId = null)
@@ -131,15 +163,20 @@ namespace SocialPicture.Infrastructure.Services
                 Content = createCommentDto.Content,
                 ParentCommentId = createCommentDto.ParentCommentId,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                User = user // Set the user for proper mapping
+                UpdatedAt = DateTime.UtcNow
             };
 
             _context.Comments.Add(comment);
             await _context.SaveChangesAsync();
 
+            // Reload the comment to get navigation properties
+            comment = await _context.Comments
+                .Include(c => c.User)
+                .Include(c => c.CommentLikes)
+                .FirstOrDefaultAsync(c => c.CommentId == comment.CommentId);
+
             // Return the newly created comment mapped to DTO
-            return await MapCommentToCommentDtoAsync(comment, userId);
+            return await MapCommentToCommentDtoAsync(comment!, userId);
         }
 
         public async Task<CommentDto> UpdateCommentAsync(int id, int userId, UpdateCommentDto updateCommentDto)
@@ -227,8 +264,8 @@ namespace SocialPicture.Infrastructure.Services
             {
                 CommentId = comment.CommentId,
                 UserId = comment.UserId,
-                Username = comment.User.Username,
-                UserProfilePicture = comment.User.ProfilePicture,
+                Username = comment.User?.Username ?? string.Empty,
+                UserProfilePicture = GetFullImageUrl(comment.User?.ProfilePicture),
                 ImageId = comment.ImageId,
                 Content = comment.Content,
                 ParentCommentId = comment.ParentCommentId,
@@ -236,7 +273,8 @@ namespace SocialPicture.Infrastructure.Services
                 UpdatedAt = comment.UpdatedAt,
                 LikesCount = likesCount,
                 IsLikedByCurrentUser = isLikedByCurrentUser,
-                RepliesCount = repliesCount
+                RepliesCount = repliesCount,
+                Replies = new List<CommentDto>() // Will be populated separately for top-level comments
             };
         }
     }

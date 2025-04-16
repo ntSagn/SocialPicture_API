@@ -15,5 +15,6 @@ namespace SocialPicture.Application.Interfaces
         Task<UserDto> UpdateUserAsync(int id, UpdateUserDto updateUserDto);
         Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto changePasswordDto);
         Task<bool> DeleteUserAsync(int id);
+        Task<UserDto> ChangeUserRoleAsync(int userId, ChangeUserRoleDto changeUserRoleDto);
     }
 }

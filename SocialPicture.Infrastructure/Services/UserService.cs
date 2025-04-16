@@ -30,6 +30,7 @@ namespace SocialPicture.Infrastructure.Services
                 Username = u.Username,
                 Email = u.Email,
                 Fullname = u.Fullname,
+                Bio = u.Bio,
                 Role = u.Role,
                 ProfilePicture = u.ProfilePicture,
                 CreatedAt = u.CreatedAt
@@ -50,6 +51,7 @@ namespace SocialPicture.Infrastructure.Services
                 Username = user.Username,
                 Email = user.Email,
                 Fullname = user.Fullname,
+                Bio = user.Bio,
                 Role = user.Role,
                 ProfilePicture = user.ProfilePicture,
                 CreatedAt = user.CreatedAt
@@ -70,6 +72,7 @@ namespace SocialPicture.Infrastructure.Services
                 Username = user.Username,
                 Email = user.Email,
                 Fullname = user.Fullname,
+                Bio = user.Bio,
                 Role = user.Role,
                 ProfilePicture = user.ProfilePicture,
                 CreatedAt = user.CreatedAt
@@ -100,6 +103,12 @@ namespace SocialPicture.Infrastructure.Services
                 user.Email = updateUserDto.Email;
             }
 
+            // Add this block to handle Bio updates
+            if (updateUserDto.Bio != null)
+            {
+                user.Bio = updateUserDto.Bio;
+            }
+
             if (updateUserDto.ProfilePicture != null)
             {
                 user.ProfilePicture = updateUserDto.ProfilePicture;
@@ -114,14 +123,26 @@ namespace SocialPicture.Infrastructure.Services
                 Username = user.Username,
                 Email = user.Email,
                 Fullname = user.Fullname,
+                Bio = user.Bio,
                 Role = user.Role,
                 ProfilePicture = user.ProfilePicture,
-                CreatedAt = user.CreatedAt
+                CreatedAt = user.CreatedAt,
+                FollowersCount = user.FollowersCount,
+                FollowingCount = user.FollowingCount,
+                PostsCount = user.PostsCount
             };
         }
 
+
         public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto changePasswordDto)
         {
+            // Validate the DTO
+            if (string.IsNullOrEmpty(changePasswordDto.CurrentPassword) ||
+                string.IsNullOrEmpty(changePasswordDto.NewPassword))
+            {
+                throw new ArgumentException("Current password and new password are required");
+            }
+
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
             {
@@ -139,9 +160,10 @@ namespace SocialPicture.Infrastructure.Services
             user.Password = _passwordHasher.HashPassword(user, changePasswordDto.NewPassword);
             user.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-            
+
             return true;
         }
+
 
         public async Task<bool> DeleteUserAsync(int id)
         {
@@ -155,6 +177,36 @@ namespace SocialPicture.Infrastructure.Services
             await _context.SaveChangesAsync();
             
             return true;
+        }
+
+        public async Task<UserDto> ChangeUserRoleAsync(int userId, ChangeUserRoleDto changeUserRoleDto)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                throw new KeyNotFoundException($"User with ID {userId} not found.");
+            }
+
+            // Set the new role
+            user.Role = changeUserRoleDto.NewRole;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return new UserDto
+            {
+                UserId = user.UserId,
+                Username = user.Username,
+                Email = user.Email,
+                Fullname = user.Fullname,
+                Bio = user.Bio,
+                Role = user.Role,
+                ProfilePicture = user.ProfilePicture,
+                CreatedAt = user.CreatedAt,
+                FollowersCount = user.FollowersCount,
+                FollowingCount = user.FollowingCount,
+                PostsCount = user.PostsCount
+            };
         }
     }
 }

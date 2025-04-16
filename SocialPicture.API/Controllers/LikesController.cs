@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SocialPicture.Application.DTOs;
 using SocialPicture.Application.Interfaces;
+using System;
+using System.Collections.Generic;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace SocialPicture.API.Controllers
 {
@@ -28,6 +31,49 @@ namespace SocialPicture.API.Controllers
             catch (KeyNotFoundException ex)
             {
                 return NotFound(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Get all images liked by a specific user
+        /// </summary>
+        [HttpGet("user/{userId}")]
+        public async Task<ActionResult<IEnumerable<ImageDto>>> GetLikedImagesByUserId(int userId)
+        {
+            try
+            {
+                int? currentUserId = null;
+                // Check if there's a logged-in user
+                if (User.Identity.IsAuthenticated)
+                {
+                    currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                }
+
+                var images = await _likeService.GetLikedImagesByUserIdAsync(userId, currentUserId);
+                return Ok(images);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Get all images liked by the current authenticated user
+        /// </summary>
+        [Authorize]
+        [HttpGet("my-likes")]
+        public async Task<ActionResult<IEnumerable<ImageDto>>> GetMyLikedImages()
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                var images = await _likeService.GetLikedImagesByUserIdAsync(userId, userId);
+                return Ok(images);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
             }
         }
 

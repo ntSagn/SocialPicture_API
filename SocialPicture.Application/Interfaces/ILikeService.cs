@@ -1,4 +1,5 @@
-﻿using SocialPicture.Application.DTOs;
+﻿
+using SocialPicture.Application.DTOs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,5 +14,7 @@ namespace SocialPicture.Application.Interfaces
         Task<LikeDto> LikeImageAsync(int userId, int imageId);
         Task<bool> UnlikeImageAsync(int userId, int imageId);
         Task<bool> HasUserLikedImageAsync(int userId, int imageId);
+        Task<IEnumerable<ImageDto>> GetLikedImagesByUserIdAsync(int userId, int? currentUserId = null);
     }
 }
+

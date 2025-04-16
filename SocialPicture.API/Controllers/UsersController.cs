@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SocialPicture.Application.DTOs;
 using SocialPicture.Application.Interfaces;
+using SocialPicture.Domain.Enums;
 using System.Security.Claims;
 
 namespace SocialPicture.API.Controllers
@@ -81,30 +82,30 @@ namespace SocialPicture.API.Controllers
             }
         }
 
-        [HttpPut("{id}/change-password")]
-        public async Task<IActionResult> ChangePassword(int id, ChangePasswordDto changePasswordDto)
+        [HttpPut("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto changePasswordDto)
         {
-            // Only allow users to change their own password
-            var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-            if (id != currentUserId)
-            {
-                return Forbid();
-            }
-
             try
             {
-                var result = await _userService.ChangePasswordAsync(id, changePasswordDto);
-                return Ok(new { success = result });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(ex.Message);
+                int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+                var result = await _userService.ChangePasswordAsync(userId, changePasswordDto);
+                return Ok(new { success = true, message = "Password changed successfully" });
             }
             catch (UnauthorizedAccessException ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while changing password" });
             }
         }
+
 
         [HttpDelete("{id}")]
         [Authorize(Roles = "ADMIN")]
@@ -118,6 +119,36 @@ namespace SocialPicture.API.Controllers
             catch (KeyNotFoundException ex)
             {
                 return NotFound(ex.Message);
+            }
+        }
+
+        [HttpPut("{id}/role")]
+        [Authorize(Roles = "ADMIN")]  // Only ADMIN can change roles
+        public async Task<IActionResult> ChangeUserRole(int id, [FromBody] ChangeUserRoleDto changeUserRoleDto)
+        {
+            try
+            {
+                // Only allow changing to USER or MANAGER roles, not ADMIN
+                if (changeUserRoleDto.NewRole == UserRole.ADMIN)
+                {
+                    return BadRequest(new { message = "Cannot assign ADMIN role through this API" });
+                }
+
+                var updatedUser = await _userService.ChangeUserRoleAsync(id, changeUserRoleDto);
+                return Ok(new
+                {
+                    success = true,
+                    message = "User role updated successfully",
+                    user = updatedUser
+                });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
             }
         }
 

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using SocialPicture.Application.DTOs;
 using SocialPicture.Application.Interfaces;
@@ -16,18 +17,49 @@ namespace SocialPicture.Infrastructure.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly string _uploadDirectory;
+        private readonly IWebHostEnvironment _environment;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public ImageService(ApplicationDbContext context)
+        public ImageService(
+            ApplicationDbContext context,
+            IWebHostEnvironment environment,
+            IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
-            // In a real app, get this from configuration
-            _uploadDirectory = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
-            
+            _environment = environment;
+            _httpContextAccessor = httpContextAccessor;
+
+            // Setup upload directory in wwwroot/images
+            _uploadDirectory = Path.Combine(_environment.WebRootPath, "images");
+
             // Create directory if it doesn't exist
             if (!Directory.Exists(_uploadDirectory))
             {
                 Directory.CreateDirectory(_uploadDirectory);
             }
+        }
+
+        private string GetFullImageUrl(string relativeUrl)
+        {
+            if (string.IsNullOrEmpty(relativeUrl))
+                return string.Empty;
+
+            // If already a full URL, return as is
+            if (relativeUrl.StartsWith("http://") || relativeUrl.StartsWith("https://"))
+                return relativeUrl;
+
+            // Build base URL from current request
+            var request = _httpContextAccessor.HttpContext?.Request;
+            if (request == null)
+                return relativeUrl;
+
+            var baseUrl = $"{request.Scheme}://{request.Host}";
+
+            // Remove leading slash if present for proper joining
+            if (relativeUrl.StartsWith("/"))
+                relativeUrl = relativeUrl.Substring(1);
+
+            return $"{baseUrl}/{relativeUrl}";
         }
 
         public async Task<IEnumerable<ImageDto>> GetAllImagesAsync(int? userId = null, bool publicOnly = true, int? currentUserId = null)
@@ -73,7 +105,8 @@ namespace SocialPicture.Infrastructure.Services
                     ImageId = image.ImageId,
                     UserId = image.UserId,
                     UserName = image.User.Username,
-                    ImageUrl = image.ImageUrl,
+                    UserProfilePicture = GetFullImageUrl(image.User.ProfilePicture), // Add profile picture
+                    ImageUrl = GetFullImageUrl(image.ImageUrl),
                     Caption = image.Caption,
                     IsPublic = image.IsPublic,
                     CreatedAt = image.CreatedAt,
@@ -88,12 +121,12 @@ namespace SocialPicture.Infrastructure.Services
         }
 
         public async Task<IEnumerable<ImageDto>> GetAllImagesAsync(
-    int? userId = null,
-    bool publicOnly = true,
-    int? currentUserId = null,
-    int page = 1,
-    int pageSize = 20,
-    bool personalizedFeed = false)
+            int? userId = null,
+            bool publicOnly = true,
+            int? currentUserId = null,
+            int page = 1,
+            int pageSize = 20,
+            bool personalizedFeed = false)
         {
             var query = _context.Images
                 .Include(i => i.User)
@@ -171,7 +204,8 @@ namespace SocialPicture.Infrastructure.Services
                     ImageId = image.ImageId,
                     UserId = image.UserId,
                     UserName = image.User.Username,
-                    ImageUrl = image.ImageUrl,
+                    UserProfilePicture = GetFullImageUrl(image.User.ProfilePicture), // Add profile picture
+                    ImageUrl = GetFullImageUrl(image.ImageUrl),
                     Caption = image.Caption,
                     IsPublic = image.IsPublic,
                     CreatedAt = image.CreatedAt,
@@ -185,15 +219,13 @@ namespace SocialPicture.Infrastructure.Services
             return imageDtos;
         }
 
-
-
         public async Task<ImageDto> GetImageByIdAsync(int id, int? currentUserId = null)
         {
             var image = await _context.Images
-        .Include(i => i.User)
-        .Include(i => i.Likes)
-        .Include(i => i.Comments)
-        .FirstOrDefaultAsync(i => i.ImageId == id);
+                .Include(i => i.User)
+                .Include(i => i.Likes)
+                .Include(i => i.Comments)
+                .FirstOrDefaultAsync(i => i.ImageId == id);
 
             if (image == null)
             {
@@ -217,7 +249,8 @@ namespace SocialPicture.Infrastructure.Services
                 ImageId = image.ImageId,
                 UserId = image.UserId,
                 UserName = image.User.Username,
-                ImageUrl = image.ImageUrl,
+                UserProfilePicture = GetFullImageUrl(image.User.ProfilePicture), // Add profile picture
+                ImageUrl = GetFullImageUrl(image.ImageUrl),
                 Caption = image.Caption,
                 IsPublic = image.IsPublic,
                 CreatedAt = image.CreatedAt,
@@ -241,26 +274,31 @@ namespace SocialPicture.Infrastructure.Services
             {
                 throw new KeyNotFoundException($"User with ID {userId} not found.");
             }
+
             if (user != null)
             {
                 user.PostsCount = (user.PostsCount ?? 0) + 1;
                 await _context.SaveChangesAsync();
             }
+
             // Generate unique filename
             var fileName = $"{Guid.NewGuid()}_{Path.GetFileName(imageFile.FileName)}";
             var filePath = Path.Combine(_uploadDirectory, fileName);
-            
+
             // Save file to disk
             using (var stream = new FileStream(filePath, FileMode.Create))
             {
                 await imageFile.CopyToAsync(stream);
             }
 
+            // Store relative path in database - this should be correctly formatted for web access
+            string relativePath = $"/images/{fileName}";
+
             // Create image record
             var image = new Image
             {
                 UserId = userId,
-                ImageUrl = $"/images/{fileName}", // Relative URL for storage
+                ImageUrl = relativePath, // Store relative URL in database
                 Caption = createImageDto.Caption,
                 IsPublic = createImageDto.IsPublic,
                 CreatedAt = DateTime.UtcNow,
@@ -270,18 +308,21 @@ namespace SocialPicture.Infrastructure.Services
             _context.Images.Add(image);
             await _context.SaveChangesAsync();
 
+            // Return full URL in the DTO
             return new ImageDto
             {
                 ImageId = image.ImageId,
                 UserId = image.UserId,
                 UserName = user.Username,
-                ImageUrl = image.ImageUrl,
+                UserProfilePicture = GetFullImageUrl(user.ProfilePicture), // Add profile picture
+                ImageUrl = GetFullImageUrl(relativePath),
                 Caption = image.Caption,
                 IsPublic = image.IsPublic,
                 CreatedAt = image.CreatedAt,
                 LikesCount = 0,
                 CommentsCount = 0,
-                IsLikedByCurrentUser = false
+                IsLikedByCurrentUser = false,
+                IsSavedByCurrentUser = false
             };
         }
 
@@ -321,13 +362,15 @@ namespace SocialPicture.Infrastructure.Services
                 ImageId = image.ImageId,
                 UserId = image.UserId,
                 UserName = image.User.Username,
-                ImageUrl = image.ImageUrl,
+                UserProfilePicture = GetFullImageUrl(image.User.ProfilePicture), // Add profile picture
+                ImageUrl = GetFullImageUrl(image.ImageUrl),
                 Caption = image.Caption,
                 IsPublic = image.IsPublic,
                 CreatedAt = image.CreatedAt,
                 LikesCount = image.Likes.Count,
                 CommentsCount = image.Comments.Count,
-                IsLikedByCurrentUser = false // Will be updated by controller
+                IsLikedByCurrentUser = false,
+                IsSavedByCurrentUser = false
             };
         }
 
@@ -344,21 +387,91 @@ namespace SocialPicture.Infrastructure.Services
                 throw new UnauthorizedAccessException("You don't have permission to delete this image.");
             }
 
-            // Delete the physical file if it exists
+            var savedImages = await _context.SavedImages
+                .Where(s => s.ImageId == id)
+                .ToListAsync();
+            if (savedImages.Any())
+            {
+                _context.SavedImages.RemoveRange(savedImages);
+            }
+
+            var imageLikes = await _context.Likes
+                .Where(l => l.ImageId == id)
+                .ToListAsync();
+            if (imageLikes.Any())
+            {
+                _context.Likes.RemoveRange(imageLikes);
+            }
+
+            
+            var comments = await _context.Comments
+                .Where(c => c.ImageId == id)
+                .ToListAsync();
+            if (comments.Any())
+            {
+                _context.Comments.RemoveRange(comments);
+            }
+
+            
+            var imageTags = await _context.ImageTags
+                .Where(t => t.ImageId == id)
+                .ToListAsync();
+            if (imageTags.Any())
+            {
+                _context.ImageTags.RemoveRange(imageTags);
+            }
+
+            
             if (!string.IsNullOrEmpty(image.ImageUrl))
             {
-                var fileName = Path.GetFileName(image.ImageUrl);
-                var filePath = Path.Combine(_uploadDirectory, fileName);
-                if (File.Exists(filePath))
+                try
                 {
-                    File.Delete(filePath);
+                    
+                    string fileName;
+                    if (image.ImageUrl.Contains("/images/"))
+                    {
+                        fileName = image.ImageUrl.Substring(image.ImageUrl.LastIndexOf("/") + 1);
+                    }
+                    else
+                    {
+                        fileName = Path.GetFileName(image.ImageUrl);
+                    }
+
+                    var filePath = Path.Combine(_uploadDirectory, fileName);
+                    Console.WriteLine($"Attempting to delete file at path: {filePath}");
+
+                    if (File.Exists(filePath))
+                    {
+                        File.Delete(filePath);
+                        Console.WriteLine($"Successfully deleted file: {filePath}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"File not found: {filePath}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    
+                    Console.WriteLine($"Error deleting image file: {ex.Message}");
+                    Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 }
             }
 
+            
             _context.Images.Remove(image);
             await _context.SaveChangesAsync();
-            
+
+           
+            var user = await _context.Users.FindAsync(image.UserId);
+            if (user != null && user.PostsCount.HasValue && user.PostsCount > 0)
+            {
+                user.PostsCount--;
+                await _context.SaveChangesAsync();
+            }
+
             return true;
         }
+
     }
 }

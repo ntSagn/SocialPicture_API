@@ -15,17 +15,19 @@ namespace SocialPicture.Application.DTOs
     public class FollowerDto
     {
         public int UserId { get; set; }
-        public string Username { get; set; } = string.Empty;
-        public string? ProfilePicture { get; set; }
-        public DateTime FollowedAt { get; set; }
+        public string Username { get; set; }
+        public string Fullname { get; set; }
+        public string ProfilePicture { get; set; }
         public bool IsFollowedByCurrentUser { get; set; }
+        public DateTime FollowingSince { get; set; }
     }
 
     public class FollowingDto
     {
         public int UserId { get; set; }
-        public string Username { get; set; } = string.Empty;
-        public string? ProfilePicture { get; set; }
+        public string Username { get; set; }
+        public string Fullname { get; set; }
+        public string ProfilePicture { get; set; }
         public DateTime FollowingSince { get; set; }
     }
 }

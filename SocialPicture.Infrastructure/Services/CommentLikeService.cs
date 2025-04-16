@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SocialPicture.Application.DTOs;
 using SocialPicture.Application.Interfaces;
 using SocialPicture.Domain.Entities;
+using SocialPicture.Domain.Enums;
 using SocialPicture.Persistence;
 using System;
 using System.Collections.Generic;
@@ -13,10 +14,14 @@ namespace SocialPicture.Infrastructure.Services
     public class CommentLikeService : ICommentLikeService
     {
         private readonly ApplicationDbContext _context;
+        private readonly INotificationService _notificationService;
 
-        public CommentLikeService(ApplicationDbContext context)
+        public CommentLikeService(
+            ApplicationDbContext context,
+            INotificationService notificationService)
         {
             _context = context;
+            _notificationService = notificationService;
         }
 
         public async Task<IEnumerable<UserDto>> GetLikesByCommentIdAsync(int commentId)
@@ -51,7 +56,10 @@ namespace SocialPicture.Infrastructure.Services
         public async Task<CommentLikeDto> LikeCommentAsync(int userId, int commentId)
         {
             // Check if comment exists
-            var comment = await _context.Comments.FindAsync(commentId);
+            var comment = await _context.Comments
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.CommentId == commentId);
+
             if (comment == null)
             {
                 throw new KeyNotFoundException($"Comment with ID {commentId} not found.");
@@ -83,6 +91,17 @@ namespace SocialPicture.Infrastructure.Services
 
             _context.CommentLikes.Add(commentLike);
             await _context.SaveChangesAsync();
+
+            // Create notification if the comment owner is not the same user who liked
+            if (comment.UserId != userId)
+            {
+                string content = $"{user.Username} liked your comment.";
+                await _notificationService.CreateNotificationAsync(
+                    comment.UserId,
+                    NotificationType.Like,
+                    commentId,
+                    content);
+            }
 
             return new CommentLikeDto
             {

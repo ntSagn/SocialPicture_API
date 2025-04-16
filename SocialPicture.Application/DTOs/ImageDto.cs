@@ -6,12 +6,14 @@ using System.Threading.Tasks;
 
 namespace SocialPicture.Application.DTOs
 {
+    // SocialPicture.Application/DTOs/ImageDto.cs
     public class ImageDto
     {
         public int ImageId { get; set; }
         public int UserId { get; set; }
-        public string UserName { get; set; } = string.Empty;
-        public string ImageUrl { get; set; } = string.Empty;
+        public string UserName { get; set; }
+        public string UserProfilePicture { get; set; }
+        public string ImageUrl { get; set; }
         public string? Caption { get; set; }
         public bool IsPublic { get; set; }
         public DateTime CreatedAt { get; set; }
@@ -20,6 +22,7 @@ namespace SocialPicture.Application.DTOs
         public bool IsLikedByCurrentUser { get; set; }
         public bool IsSavedByCurrentUser { get; set; }
     }
+
 
     public class CreateImageDto
     {
