@@ -301,8 +301,8 @@ namespace SocialPicture.Infrastructure.Services
                 ImageUrl = relativePath, // Store relative URL in database
                 Caption = createImageDto.Caption,
                 IsPublic = createImageDto.IsPublic,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
             };
 
             _context.Images.Add(image);
@@ -354,7 +354,7 @@ namespace SocialPicture.Infrastructure.Services
                 image.IsPublic = updateImageDto.IsPublic.Value;
             }
 
-            image.UpdatedAt = DateTime.UtcNow;
+            image.UpdatedAt = DateTime.Now;
             await _context.SaveChangesAsync();
 
             return new ImageDto

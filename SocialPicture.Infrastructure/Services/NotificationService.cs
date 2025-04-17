@@ -30,16 +30,26 @@ namespace SocialPicture.Infrastructure.Services
                 .OrderByDescending(n => n.CreatedAt)
                 .ToListAsync();
 
-            return notifications.Select(n => new NotificationDto
+            var notificationDtos = new List<NotificationDto>();
+
+            foreach (var n in notifications)
             {
-                NotificationId = n.NotificationId,
-                UserId = n.UserId,
-                Type = n.Type,
-                ReferenceId = n.ReferenceId,
-                Content = n.Content,
-                IsRead = n.IsRead,
-                CreatedAt = n.CreatedAt
-            });
+                var senderProfilePicture = await GetSenderProfilePictureAsync(n.Type, n.ReferenceId);
+
+                notificationDtos.Add(new NotificationDto
+                {
+                    NotificationId = n.NotificationId,
+                    UserId = n.UserId,
+                    Type = n.Type,
+                    ReferenceId = n.ReferenceId,
+                    Content = n.Content,
+                    IsRead = n.IsRead,
+                    CreatedAt = n.CreatedAt,
+                    SenderProfilePicture = senderProfilePicture
+                });
+            }
+
+            return notificationDtos;
         }
 
         public async Task<NotificationDto> GetNotificationByIdAsync(int id)
@@ -50,6 +60,8 @@ namespace SocialPicture.Infrastructure.Services
                 throw new KeyNotFoundException($"Notification with ID {id} not found.");
             }
 
+            var senderProfilePicture = await GetSenderProfilePictureAsync(notification.Type, notification.ReferenceId);
+
             return new NotificationDto
             {
                 NotificationId = notification.NotificationId,
@@ -58,7 +70,8 @@ namespace SocialPicture.Infrastructure.Services
                 ReferenceId = notification.ReferenceId,
                 Content = notification.Content,
                 IsRead = notification.IsRead,
-                CreatedAt = notification.CreatedAt
+                CreatedAt = notification.CreatedAt,
+                SenderProfilePicture = senderProfilePicture
             };
         }
 
@@ -78,11 +91,14 @@ namespace SocialPicture.Infrastructure.Services
                 ReferenceId = referenceId,
                 Content = content,
                 IsRead = false,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();
+
+            // Immediately get the sender's profile picture for the response
+            var senderProfilePicture = await GetSenderProfilePictureAsync(notification.Type, notification.ReferenceId);
 
             return new NotificationDto
             {
@@ -92,9 +108,11 @@ namespace SocialPicture.Infrastructure.Services
                 ReferenceId = notification.ReferenceId,
                 Content = notification.Content,
                 IsRead = notification.IsRead,
-                CreatedAt = notification.CreatedAt
+                CreatedAt = notification.CreatedAt,
+                SenderProfilePicture = senderProfilePicture
             };
         }
+
 
         public async Task<bool> MarkNotificationAsReadAsync(int id)
         {
@@ -140,12 +158,20 @@ namespace SocialPicture.Infrastructure.Services
         public async Task<NotificationSummaryDto> GetNotificationSummaryAsync(int userId)
         {
             var unreadCount = await GetUnreadNotificationsCountAsync(userId);
-            
-            var recentNotifications = await _context.Notifications
+
+            var notifications = await _context.Notifications
                 .Where(n => n.UserId == userId)
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(5) // Get 5 most recent notifications
-                .Select(n => new NotificationDto
+                .ToListAsync();
+
+            var recentNotifications = new List<NotificationDto>();
+
+            foreach (var n in notifications)
+            {
+                var senderProfilePicture = await GetSenderProfilePictureAsync(n.Type, n.ReferenceId);
+
+                recentNotifications.Add(new NotificationDto
                 {
                     NotificationId = n.NotificationId,
                     UserId = n.UserId,
@@ -153,9 +179,10 @@ namespace SocialPicture.Infrastructure.Services
                     ReferenceId = n.ReferenceId,
                     Content = n.Content,
                     IsRead = n.IsRead,
-                    CreatedAt = n.CreatedAt
-                })
-                .ToListAsync();
+                    CreatedAt = n.CreatedAt,
+                    SenderProfilePicture = senderProfilePicture
+                });
+            }
 
             return new NotificationSummaryDto
             {
@@ -163,5 +190,91 @@ namespace SocialPicture.Infrastructure.Services
                 RecentNotifications = recentNotifications
             };
         }
+
+        public async Task<bool> DeleteNotificationAsync(int id)
+        {
+            var notification = await _context.Notifications
+                .FirstOrDefaultAsync(n => n.NotificationId == id);
+
+            if (notification == null)
+            {
+                throw new KeyNotFoundException($"Notification with ID {id} not found.");
+            }
+
+            _context.Notifications.Remove(notification);
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        private async Task<string?> GetSenderProfilePictureAsync(NotificationType type, int referenceId)
+        {
+            try
+            {
+                int senderId = 0;
+
+                switch (type)
+                {
+                    case NotificationType.Like:
+                        // For likes, referenceId is the imageId
+                        // We need to get the user who performed the like action
+                        var image = await _context.Images
+                            .Include(i => i.Likes)
+                            .ThenInclude(l => l.User)
+                            .FirstOrDefaultAsync(i => i.ImageId == referenceId);
+
+                        if (image != null && image.Likes.Any())
+                        {
+                            // Get the latest like's user profile picture
+                            var latestLike = image.Likes.OrderByDescending(l => l.CreatedAt).FirstOrDefault();
+                            return latestLike?.User?.ProfilePicture;
+                        }
+                        return null;
+
+                    case NotificationType.Comment:
+                        // For comments, referenceId is the commentId
+                        var comment = await _context.Comments
+                            .Include(c => c.User)
+                            .FirstOrDefaultAsync(c => c.CommentId == referenceId);
+                        return comment?.User?.ProfilePicture;
+
+                    case NotificationType.CommentLike:
+                        // For comment likes, referenceId might be the commentId
+                        var commentLikes = await _context.CommentLikes
+                            .Include(cl => cl.User)
+                            .Where(cl => cl.CommentId == referenceId)
+                            .OrderByDescending(cl => cl.CreatedAt)
+                            .ToListAsync();
+
+                        if (commentLikes.Any())
+                        {
+                            return commentLikes.First().User?.ProfilePicture;
+                        }
+                        return null;
+
+                    case NotificationType.Follow:
+                        // For follows, referenceId is the followerId (who initiated the follow)
+                        var follower = await _context.Users
+                            .FirstOrDefaultAsync(u => u.UserId == referenceId);
+                        return follower?.ProfilePicture;
+
+                    case NotificationType.ReportResolution:
+                        var report = await _context.Reports
+                            .Include(r => r.ResolvedBy)
+                            .FirstOrDefaultAsync(r => r.ReportId == referenceId);
+                        return report?.ResolvedBy?.ProfilePicture;
+
+                    default:
+                        return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the exception
+                Console.WriteLine($"Error fetching profile picture: {ex.Message}");
+                return null;
+            }
+        }
+
     }
 }

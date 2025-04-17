@@ -166,7 +166,7 @@ namespace SocialPicture.Infrastructure.Services
                 ImageId = createReportDto.ImageId,
                 Reason = createReportDto.Reason,
                 Status = ReportStatus.Pending,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.Reports.Add(report);
@@ -218,7 +218,7 @@ namespace SocialPicture.Infrastructure.Services
             // Update report status
             report.Status = resolveReportDto.Status;
             report.ResolvedById = resolverId;
-            report.ResolvedAt = DateTime.UtcNow;
+            report.ResolvedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 

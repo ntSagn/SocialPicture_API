@@ -12,5 +12,6 @@ namespace SocialPicture.Application.Interfaces
         Task<bool> MarkAllUserNotificationsAsReadAsync(int userId);
         Task<int> GetUnreadNotificationsCountAsync(int userId);
         Task<NotificationSummaryDto> GetNotificationSummaryAsync(int userId);
+        Task<bool> DeleteNotificationAsync(int id);
     }
 }

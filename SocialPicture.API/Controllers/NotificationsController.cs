@@ -113,5 +113,29 @@ namespace SocialPicture.API.Controllers
             var summary = await _notificationService.GetNotificationSummaryAsync(userId);
             return Ok(summary);
         }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteNotification(int id)
+        {
+            try
+            {
+                // First, get the notification to verify ownership
+                var notification = await _notificationService.GetNotificationByIdAsync(id);
+
+                // Ensure users can only delete their own notifications
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                if (notification.UserId != userId)
+                {
+                    return Forbid();
+                }
+
+                var result = await _notificationService.DeleteNotificationAsync(id);
+                return Ok(new { success = result });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
     }
 }

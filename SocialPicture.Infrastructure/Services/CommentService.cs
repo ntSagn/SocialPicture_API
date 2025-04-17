@@ -162,8 +162,8 @@ namespace SocialPicture.Infrastructure.Services
                 ImageId = createCommentDto.ImageId,
                 Content = createCommentDto.Content,
                 ParentCommentId = createCommentDto.ParentCommentId,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
             };
 
             _context.Comments.Add(comment);

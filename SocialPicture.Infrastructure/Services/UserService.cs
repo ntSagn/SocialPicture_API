@@ -33,6 +33,8 @@ namespace SocialPicture.Infrastructure.Services
                 Bio = u.Bio,
                 Role = u.Role,
                 ProfilePicture = u.ProfilePicture,
+                FollowersCount = u.FollowersCount,
+                FollowingCount = u.FollowingCount,
                 CreatedAt = u.CreatedAt
             });
         }
@@ -54,6 +56,8 @@ namespace SocialPicture.Infrastructure.Services
                 Bio = user.Bio,
                 Role = user.Role,
                 ProfilePicture = user.ProfilePicture,
+                FollowersCount = user.FollowersCount,
+                FollowingCount = user.FollowingCount,
                 CreatedAt = user.CreatedAt
             };
         }
@@ -114,7 +118,7 @@ namespace SocialPicture.Infrastructure.Services
                 user.ProfilePicture = updateUserDto.ProfilePicture;
             }
 
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
             await _context.SaveChangesAsync();
 
             return new UserDto
@@ -158,7 +162,7 @@ namespace SocialPicture.Infrastructure.Services
 
             // Hash new password
             user.Password = _passwordHasher.HashPassword(user, changePasswordDto.NewPassword);
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
             await _context.SaveChangesAsync();
 
             return true;
@@ -189,7 +193,7 @@ namespace SocialPicture.Infrastructure.Services
 
             // Set the new role
             user.Role = changeUserRoleDto.NewRole;
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 

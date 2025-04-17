@@ -40,8 +40,8 @@ namespace SocialPicture.Infrastructure.Services
                 Email = registerDto.Email,
                 Fullname = registerDto.Fullname,
                 Role = UserRole.USER,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
             };
 
             user.Password = _passwordHasher.HashPassword(user, registerDto.Password);

@@ -86,7 +86,7 @@ namespace SocialPicture.Infrastructure.Services
             {
                 UserId = userId,
                 CommentId = commentId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.CommentLikes.Add(commentLike);

@@ -11,7 +11,9 @@ namespace SocialPicture.Application.DTOs
         public string Content { get; set; } = string.Empty;
         public bool IsRead { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string? SenderProfilePicture { get; set; }
     }
+
 
     public class NotificationSummaryDto
     {
