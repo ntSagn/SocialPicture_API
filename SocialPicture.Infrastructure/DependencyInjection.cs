@@ -23,7 +23,9 @@ public static class DependencyInjection
 
         // Register IHttpContextAccessor
         services.AddHttpContextAccessor();
-
+        services.AddHttpClient();
+        services.AddScoped<IContentModerationService, ContentModerationService>();
+        
         // Add authentication services
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITokenService, TokenService>();
@@ -40,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<ICommentLikeService, CommentLikeService>();
+        
 
         // JWT Authentication
         services.AddAuthentication(options =>

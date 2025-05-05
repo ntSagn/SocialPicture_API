@@ -5,16 +5,13 @@ using SocialPicture.Application.DTOs;
 using SocialPicture.Application.Interfaces;
 using SocialPicture.Domain.Entities;
 using SocialPicture.Persistence;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Net.Http;
 
 namespace SocialPicture.Infrastructure.Services
 {
     public class ImageService : IImageService
     {
+        private readonly IContentModerationService _contentModerationService;
         private readonly ApplicationDbContext _context;
         private readonly string _uploadDirectory;
         private readonly IWebHostEnvironment _environment;
@@ -23,11 +20,14 @@ namespace SocialPicture.Infrastructure.Services
         public ImageService(
             ApplicationDbContext context,
             IWebHostEnvironment environment,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            IContentModerationService contentModerationService)
         {
             _context = context;
             _environment = environment;
             _httpContextAccessor = httpContextAccessor;
+            _contentModerationService = contentModerationService;
+            _uploadDirectory = Path.Combine(environment.ContentRootPath, "wwwroot", "images");
 
             // Setup upload directory in wwwroot/images
             _uploadDirectory = Path.Combine(_environment.WebRootPath, "images");
@@ -37,6 +37,9 @@ namespace SocialPicture.Infrastructure.Services
             {
                 Directory.CreateDirectory(_uploadDirectory);
             }
+
+            _contentModerationService = contentModerationService;
+
         }
 
         private string GetFullImageUrl(string relativeUrl)
@@ -275,10 +278,12 @@ namespace SocialPicture.Infrastructure.Services
                 throw new KeyNotFoundException($"User with ID {userId} not found.");
             }
 
-            if (user != null)
+            // Check image content with moderation service BEFORE saving to disk
+            var moderationResult = await _contentModerationService.CheckImageFileContentAsync(imageFile);
+
+            if (!moderationResult.isAppropriate)
             {
-                user.PostsCount = (user.PostsCount ?? 0) + 1;
-                await _context.SaveChangesAsync();
+                throw new InvalidOperationException(moderationResult.message);
             }
 
             // Generate unique filename
@@ -291,14 +296,14 @@ namespace SocialPicture.Infrastructure.Services
                 await imageFile.CopyToAsync(stream);
             }
 
-            // Store relative path in database - this should be correctly formatted for web access
+            // File path for database
             string relativePath = $"/images/{fileName}";
 
-            // Create image record
+            // Continue with existing code to store image in database
             var image = new Image
             {
                 UserId = userId,
-                ImageUrl = relativePath, // Store relative URL in database
+                ImageUrl = relativePath,
                 Caption = createImageDto.Caption,
                 IsPublic = createImageDto.IsPublic,
                 CreatedAt = DateTime.Now,
@@ -308,14 +313,21 @@ namespace SocialPicture.Infrastructure.Services
             _context.Images.Add(image);
             await _context.SaveChangesAsync();
 
+            // Update user post count if successful
+            if (user != null)
+            {
+                user.PostsCount = (user.PostsCount ?? 0) + 1;
+                await _context.SaveChangesAsync();
+            }
+
             // Return full URL in the DTO
             return new ImageDto
             {
                 ImageId = image.ImageId,
                 UserId = image.UserId,
                 UserName = user.Username,
-                UserProfilePicture = GetFullImageUrl(user.ProfilePicture), // Add profile picture
-                ImageUrl = GetFullImageUrl(relativePath),
+                UserProfilePicture = GetFullImageUrl(user.ProfilePicture),
+                ImageUrl = GetFullImageUrl(image.ImageUrl),
                 Caption = image.Caption,
                 IsPublic = image.IsPublic,
                 CreatedAt = image.CreatedAt,
